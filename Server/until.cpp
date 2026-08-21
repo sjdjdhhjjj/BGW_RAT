@@ -16,7 +16,7 @@ unsigned int __stdcall ThreadLoader(LPVOID param)
         THREAD_ARGLIST	arg;
         memcpy(&arg, param, sizeof(arg));
         SetEvent(arg.hEventTransferArg);
-        // Óë×¿Ãæ½»»¥
+        // ä¸å“é¢äº¤äº’
         if (arg.bInteractive)
             SelectDesktop(NULL);
         nRet = arg.start_address(arg.arglist);
@@ -365,7 +365,7 @@ DWORD GetProcessID(LPCTSTR lpProcessName)
     }
 
 
-    CloseHandle(handle);//ĞÂĞŞ¸Ä
+    CloseHandle(handle);//æ–°ä¿®æ”¹
 
     delete info;
 
@@ -389,7 +389,7 @@ char * my_strchr(const char *str, int ch)
         return((char *)str);
     return(NULL);
 }
-//¶ÁÈ¡×¢²á±íµÄÖ¸¶¨¼üµÄÊı¾İ(Mode:0-¶Á¼üÖµÊı¾İ 1-ÄÁ¾Ù×Ó¼ü)
+//è¯»å–æ³¨å†Œè¡¨çš„æŒ‡å®šé”®çš„æ•°æ®(Mode:0-è¯»é”®å€¼æ•°æ® 1-ç‰§ä¸¾å­é”®)
 int  ReadRegEx(HKEY MainKey,LPCTSTR SubKey,LPCTSTR Vname,DWORD Type,char *szData,LPBYTE szBytes,DWORD lbSize,int Mode)
 {
     HKEY   hKey=NULL;
@@ -488,7 +488,7 @@ char * my_strncpy( char * dest, const char * source, int count )
     return(dest);
 }
 
-//Ğ´×¢²á±íµÄÖ¸¶¨¼üµÄÊı¾İ(Mode:0-ĞÂ½¨¼üÊı¾İ 1-ÉèÖÃ¼üÊı¾İ 2-É¾³ıÖ¸¶¨¼ü 3-É¾³ıÖ¸¶¨¼üÏî)
+//å†™æ³¨å†Œè¡¨çš„æŒ‡å®šé”®çš„æ•°æ®(Mode:0-æ–°å»ºé”®æ•°æ® 1-è®¾ç½®é”®æ•°æ® 2-åˆ é™¤æŒ‡å®šé”® 3-åˆ é™¤æŒ‡å®šé”®é¡¹)
 int WriteRegEx(HKEY MainKey,LPCTSTR SubKey,LPCTSTR Vname,DWORD Type,const char* szData,DWORD dwData,int Mode)
 {
     HKEY  hKey=NULL;
@@ -526,27 +526,41 @@ int WriteRegEx(HKEY MainKey,LPCTSTR SubKey,LPCTSTR Vname,DWORD Type,const char* 
             case REG_SZ:
             case REG_EXPAND_SZ:
             case REG_MULTI_SZ:
-                if(MyRegSetValueEx(hKey,Vname,0,Type,(LPBYTE)szData,lstrlen(szData)+1) == ERROR_SUCCESS)
-                    iResult =1;
+                switch (nAction) {
+    case 1:
+        switch (Type) {
+            case REG_SZ:
+                if (RegSetValueExA(hKey, (LPCSTR)Vname, 0, Type, 
+                    (CONST BYTE*)szData, lstrlenA(szData) + 1) == ERROR_SUCCESS)
+                    iResult = 1;
                 break;
+
             case REG_DWORD:
-                if(MyRegSetValueEx(hKey,Vname,0,Type,(LPBYTE)&dwData,sizeof(DWORD)) == ERROR_SUCCESS)
-                    iResult =1;
+                if (MyRegSetValueEx(hKey, Vname, 0, Type, 
+                    (LPBYTE)&dwData, sizeof(dwData)) == ERROR_SUCCESS)
+                    iResult = 1;
                 break;
+
             case REG_BINARY:
                 break;
-            }
-            break;
-        case 2:
-            if(MyRegOpenKeyEx(MainKey,SubKey,NULL,KEY_READ|KEY_WRITE,&hKey) != ERROR_SUCCESS)
-                __leave;
-            if (MyRegDeleteKey(hKey,Vname) == ERROR_SUCCESS)
-                iResult =1;
-            break;
-        case 3:
-            if(MyRegOpenKeyEx(MainKey,SubKey,NULL,KEY_READ|KEY_WRITE,&hKey) != ERROR_SUCCESS)
-                __leave;
-            if (MyRegDeleteValue(hKey,Vname) == ERROR_SUCCESS)
+        }
+        break;
+
+    case 2:
+        if (MyRegOpenKeyEx(MainKey, SubKey, 0, KEY_READ | KEY_WRITE, &hKey) != ERROR_SUCCESS)
+            __leave;
+        // â† æ”¹è¿™é‡Œï¼šVname æ˜¯å€¼åï¼Œç”¨ DeleteValue
+        if (MyRegDeleteValue(hKey, Vname) == ERROR_SUCCESS)
+            iResult = 1;
+        break;
+
+    case 3:
+        if (MyRegOpenKeyEx(MainKey, SubKey, 0, KEY_READ | KEY_WRITE, &hKey) != ERROR_SUCCESS)
+            __leave;
+        if (MyRegDeleteValue(hKey, Vname) == ERROR_SUCCESS)
+            iResult = 1;
+        break;
+                }
                 iResult =1;
             break;
         default:
