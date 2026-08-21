@@ -14,8 +14,15 @@ jobs:
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v2
 
-    - name: Build Solution (自动选择配置)
-      run: msbuild Gh0st.sln /p:Configuration=Release
+    - name: Install MFC components (修复 afxwin.h 缺失)
+      shell: powershell
+      run: |
+        $vsPath = (vswhere -latest -property installationPath)
+        $installer = "$vsPath\Common7\Tools\vs_installer.exe"
+        & $installer modify --installPath $vsPath --add Microsoft.VisualStudio.Component.VC.MFC --quiet --norestart
+
+    - name: Build Solution (Release + MultiByte 字符集)
+      run: msbuild Gh0st.sln /p:Configuration=Release /p:CharacterSet=MultiByte
 
     - name: Upload EXE files
       uses: actions/upload-artifact@v4
