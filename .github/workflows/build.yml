@@ -6,25 +6,27 @@ on:
 jobs:
   build:
     runs-on: windows-2022
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Add msbuild to PATH
+      - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
-      - name: Install MFC (提供 afxwin.h)
+      - name: Install MFC (重点，千万不要删！)
         shell: pwsh
         run: |
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $installPath = & $vswhere -latest -property installationPath
           Start-Process -FilePath "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe" -ArgumentList "modify", "--installPath", "$installPath", "--add", "Microsoft.VisualStudio.Component.VC.ATLMFC", "--quiet", "--norestart" -Wait
-      - name: Build All Projects (修复全部编译错误)
+          Write-Host "MFC install completed."
+      - name: Build All Projects
         shell: cmd
         run: |
-          msbuild "${{ github.workspace }}\Server\Server.vcxproj" /p:Configuration=Release /p:Platform=x64 /p:CharacterSet=MultiByte /p:PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS;_MBCS" /m
-          msbuild "${{ github.workspace }}\Server\TestDll.vcxproj" /p:Configuration=Release /p:Platform=x64 /p:CharacterSet=MultiByte /p:PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS;_MBCS" /m
+          msbuild "${{ github.workspace }}\Server\Server.vcxproj" /p:Configuration=Release /p:Platform=x64 /p:CharacterSet=MultiByte /p:PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS;_MBCS" /p:UseOfMfc=Dynamic /m
+          msbuild "${{ github.workspace }}\Server\TestDll.vcxproj" /p:Configuration=Release /p:Platform=x64 /p:CharacterSet=MultiByte /p:PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS;_MBCS" /p:UseOfMfc=Dynamic /m
       - name: Upload All EXE and DLL
         uses: actions/upload-artifact@v4
         with:
-          name: Complete
+          name: BGW_RAT_Complete
           path: |
             Server\**\*.exe
             Server\**\*.dll
