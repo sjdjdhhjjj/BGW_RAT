@@ -11,23 +11,27 @@ jobs:
     runs-on: windows-latest
 
     steps:
+    # 1. 拉取代码
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
+    # 2. 将 msbuild 添加到 PATH
+    - name: Add msbuild to PATH
+      uses: microsoft/setup-msbuild@v2 [citation:4][citation:6]
 
-    # 1. 动态查找 VS 路径并静默安装 MFC 组件（解决 afxwin.h 找不到的问题）
-    - name: Install MFC Components
+    # 3. 直接下载并静默安装 MFC 组件（解决 C1083: afxwin.h 找不到）
+    - name: Install VS MFC Components
+      shell: powershell
+      run: |
+        $installer = "$env:TEMP\vs_installer.exe"
+        Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vs_enterprise.exe" -OutFile $installer
+        $arguments = '--quiet --wait --norestart --nocache --add Microsoft.VisualStudio.Component.VC.ATLMFC --add Microsoft.VisualStudio.Component.VC.ATL --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64'
+        Start-Process -FilePath $installer -ArgumentList $arguments -Wait
+        Write-Host "MFC components installed successfully." [citation:1][citation:3]
+
+    # 4. 构建项目 (强制添加宏以屏蔽 C4996 错误)
+    - name: Build Solution
       shell: cmd
       run: |
-        set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
-        for /f "usebackq tokens=*" %%i in (`"%VSWHERE%" -latest -property installationPath`) do set "INSTALL_PATH=%%i"
-        echo Installing MFC to %INSTALL_PATH%
-        "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vs_installer.exe" modify --installPath "%INSTALL_PATH%" --add Microsoft.VisualStudio.Component.VC.ATLMFC --passive --norestart
-        timeout /t 120 /nobreak
-
-    # 2. 编译项目（加入了 _CRT_SECURE_NO_WARNINGS 宏屏蔽 C4996 错误；并将工具集强制修正为 v143）
-    - name: Build Solution
-      # 如果你要编译的是 .sln，请改成 Server\TestDll.sln
-      run: msbuild ${{ github.workspace }}\Server\TestDll.vcxproj /p:Configuration=Release /p:Platform=x64 /p:PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS" /p:PlatformToolset=v143 /m
+        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64
+        msbuild "${{ github.workspace }}\Server\TestDll.vcxproj" /p:Configuration=Release /p:Platform=x64 /p:PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS" /m
