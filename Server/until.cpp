@@ -491,89 +491,90 @@ char * my_strncpy( char * dest, const char * source, int count )
 //写注册表的指定键的数据(Mode:0-新建键数据 1-设置键数据 2-删除指定键 3-删除指定键项)
 int WriteRegEx(HKEY MainKey,LPCTSTR SubKey,LPCTSTR Vname,DWORD Type,const char* szData,DWORD dwData,int Mode)
 {
-    HKEY  hKey=NULL;
-    DWORD dwDisposition;
-    int   iResult =0;
+    HKEY  hKey = NULL;
+DWORD dwDisposition;
+int   iResult = 0;
+
 //////////////////////////////////////////////////////////////////////////
-    HINSTANCE advapi32 = LoadLibrary("ADVAPI32.dll");
+HINSTANCE advapi32 = LoadLibrary("ADVAPI32.dll");
 
-    typedef LONG (WINAPI *TRegCreateKeyExA)(HKEY,LPCSTR,DWORD,LPSTR,DWORD,REGSAM,LPSECURITY_ATTRIBUTES,PHKEY,LPDWORD );
-    typedef LONG (WINAPI *TRegSetValueExA)(HKEY,LPCSTR,DWORD,DWORD,CONST BYTE *,DWORD );
-    typedef LONG (WINAPI *TRegDeleteKeyA)(HKEY,LPCSTR );
-    typedef LONG (WINAPI *TRegDeleteValueA)(HKEY,LPCSTR );
-    typedef LONG (WINAPI *TRegOpenKeyExA)(HKEY,LPCSTR,DWORD,REGSAM,PHKEY );
-    typedef LONG (WINAPI *TRegCloseKey)(HKEY );
+typedef LONG (WINAPI *TRegCreateKeyExA)(HKEY, LPCSTR, DWORD, LPSTR, DWORD, REGSAM, LPSECURITY_ATTRIBUTES, PHKEY, LPDWORD);
+typedef LONG (WINAPI *TRegSetValueExA)(HKEY, LPCSTR, DWORD, DWORD, CONST BYTE *, DWORD);
+typedef LONG (WINAPI *TRegDeleteKeyA)(HKEY, LPCSTR);
+typedef LONG (WINAPI *TRegDeleteValueA)(HKEY, LPCSTR);
+typedef LONG (WINAPI *TRegOpenKeyExA)(HKEY, LPCSTR, DWORD, REGSAM, PHKEY);
+typedef LONG (WINAPI *TRegCloseKey)(HKEY);
 
-    TRegCreateKeyExA MyRegCreateKeyEx= (TRegCreateKeyExA)GetProcAddress(advapi32, "RegCreateKeyExA");
-    TRegSetValueExA MyRegSetValueEx = (TRegSetValueExA)GetProcAddress(advapi32, "RegSetValueExA");
-    TRegDeleteKeyA MyRegDeleteKey = (TRegDeleteKeyA)GetProcAddress(advapi32, "RegDeleteKeyA");
-    TRegDeleteValueA MyRegDeleteValue= (TRegDeleteValueA)GetProcAddress(advapi32, "RegDeleteValueA");
-    TRegOpenKeyExA MyRegOpenKeyEx = (TRegOpenKeyExA)GetProcAddress(advapi32, "RegOpenKeyExA");
-    TRegCloseKey MyRegCloseKey= (TRegCloseKey)GetProcAddress(advapi32, "RegCloseKey");
+TRegCreateKeyExA MyRegCreateKeyEx = (TRegCreateKeyExA)GetProcAddress(advapi32, "RegCreateKeyExA");
+TRegSetValueExA  MyRegSetValueEx  = (TRegSetValueExA)GetProcAddress(advapi32, "RegSetValueExA");
+TRegDeleteKeyA   MyRegDeleteKey   = (TRegDeleteKeyA)GetProcAddress(advapi32, "RegDeleteKeyA");
+TRegDeleteValueA MyRegDeleteValue = (TRegDeleteValueA)GetProcAddress(advapi32, "RegDeleteValueA");
+TRegOpenKeyExA   MyRegOpenKeyEx   = (TRegOpenKeyExA)GetProcAddress(advapi32, "RegOpenKeyExA");
+TRegCloseKey     MyRegCloseKey    = (TRegCloseKey)GetProcAddress(advapi32, "RegCloseKey");
 //////////////////////////////////////////////////////////////////////////
 
-
-    __try {
-        //	SetKeySecurityEx(MainKey,Subkey,KEY_ALL_ACCESS);
-        switch(Mode) {
-        case 0:
-            if(MyRegCreateKeyEx(MainKey,SubKey,0,NULL,REG_OPTION_NON_VOLATILE,KEY_ALL_ACCESS,NULL,&hKey,&dwDisposition) != ERROR_SUCCESS)
-                __leave;
-        case 1:
-            if(MyRegOpenKeyEx(MainKey,SubKey,0,KEY_READ|KEY_WRITE,&hKey) != ERROR_SUCCESS)
-                __leave;
-            switch(Type) {
-            case REG_SZ:
-            case REG_EXPAND_SZ:
-            case REG_MULTI_SZ:
-                switch (nAction) {
+__try {
+    // 1. 根据 Mode 打开或创建键
+    switch(Mode) {
+    case 0:
+        if(MyRegCreateKeyEx(MainKey, SubKey, 0, NULL, REG_OPTION_NON_VOLATILE, 
+            KEY_ALL_ACCESS, NULL, &hKey, &dwDisposition) != ERROR_SUCCESS)
+            __leave;
+        break;  // ← 必须有 break，否则 fallthrough 到 case 1
     case 1:
-        switch (Type) {
-            case REG_SZ:
-                if (RegSetValueExA(hKey, (LPCSTR)Vname, 0, Type, 
-                    (CONST BYTE*)szData, lstrlenA(szData) + 1) == ERROR_SUCCESS)
-                    iResult = 1;
-                break;
-
-            case REG_DWORD:
-                if (MyRegSetValueEx(hKey, Vname, 0, Type, 
-                    (LPBYTE)&dwData, sizeof(dwData)) == ERROR_SUCCESS)
-                    iResult = 1;
-                break;
-
-            case REG_BINARY:
-                break;
-        }
-        break;
-
-    case 2:
-        if (MyRegOpenKeyEx(MainKey, SubKey, 0, KEY_READ | KEY_WRITE, &hKey) != ERROR_SUCCESS)
+        if(MyRegOpenKeyEx(MainKey, SubKey, 0, KEY_READ | KEY_WRITE, &hKey) != ERROR_SUCCESS)
             __leave;
-        // ← 改这里：Vname 是值名，用 DeleteValue
-        if (MyRegDeleteValue(hKey, Vname) == ERROR_SUCCESS)
-            iResult = 1;
         break;
+    default:
+        __leave;
+    }
 
-    case 3:
-        if (MyRegOpenKeyEx(MainKey, SubKey, 0, KEY_READ | KEY_WRITE, &hKey) != ERROR_SUCCESS)
-            __leave;
-        if (MyRegDeleteValue(hKey, Vname) == ERROR_SUCCESS)
-            iResult = 1;
-        break;
-                }
-                iResult =1;
+    // 2. 根据 nAction 执行操作
+    switch(nAction) {
+    case 1: // 写值
+        switch(Type) {
+        case REG_SZ:
+        case REG_EXPAND_SZ:
+        case REG_MULTI_SZ:
+            if(MyRegSetValueEx(hKey, Vname, 0, Type, 
+                (CONST BYTE*)szData, lstrlenA(szData) + 1) == ERROR_SUCCESS)
+                iResult = 1;
+            break;
+        case REG_DWORD:
+            if(MyRegSetValueEx(hKey, Vname, 0, Type, 
+                (LPBYTE)&dwData, sizeof(dwData)) == ERROR_SUCCESS)
+                iResult = 1;
+            break;
+        case REG_BINARY:
+            // 需要额外传入数据指针和长度
             break;
         default:
-            __leave;
-
+            break;
         }
-    } __finally {
-        MyRegCloseKey(MainKey);
-        MyRegCloseKey(hKey);
+        break;
+
+    case 2: // 删子键（Vname 此时是子键名）
+        if(MyRegDeleteKey(hKey, Vname) == ERROR_SUCCESS)
+            iResult = 1;
+        break;
+
+    case 3: // 删值（Vname 是值名）
+        if(MyRegDeleteValue(hKey, Vname) == ERROR_SUCCESS)
+            iResult = 1;
+        break;
+
+    default:
+        break;
     }
-    if(advapi32)
-        FreeLibrary(advapi32);
-    return iResult;
+} __finally {
+    // ← 修正：不能关 MainKey（那是根键句柄），只能关 hKey
+    if(hKey != NULL) {
+        MyRegCloseKey(hKey);
+        hKey = NULL;
+    }
 }
 
-#endif // !defined(AFX_UNTIL_CPP_INCLUDED)
+if(advapi32)
+    FreeLibrary(advapi32);
+
+return iResult;
