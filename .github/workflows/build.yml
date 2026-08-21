@@ -8,18 +8,29 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 30  # 确保安装MFC时有足够的时间，不被超时打断
+
     steps:
-    - uses: actions/checkout@v4
+    # 1. 拉取代码
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-    - name: Install MFC
-      shell: cmd
+    # 2. 配置MSBuild环境
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    # 3. 静默安装MFC组件（解决找不到 afxwin.h 的核心问题）
+    # 注意：这里必须用 Start-Process -Wait，不能用 timeout，否则必报错
+    - name: Install MFC Components
+      shell: pwsh
       run: |
-        call "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe" modify --installPath "C:\Program Files\Microsoft Visual Studio\2022\Enterprise" --add Microsoft.VisualStudio.Component.VC.ATLMFC --quiet --norestart
-        echo "MFC installing, waiting 120 seconds..."
-        timeout /t 120 /nobreak
+        $installerPath = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe"
+        $vsPath = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise"
+        Start-Process -FilePath $installerPath -ArgumentList "modify", "--installPath", $vsPath, "--add", "Microsoft.VisualStudio.Component.VC.ATLMFC", "--passive", "--norestart" -Wait
+        Write-Host "MFC installed successfully. Proceeding to build..."
 
+    # 4. 编译项目（加上宏屏蔽 C4996 报错）
     - name: Build Solution
       shell: cmd
       run: |
-        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
         msbuild "${{ github.workspace }}\Server\TestDll.vcxproj" /p:Configuration=Release /p:Platform=x64 /p:PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS" /m
