@@ -27,7 +27,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host "MFC installer exit code: $LASTEXITCODE" }
 
       - name: Build All Projects
-        run: msbuild Gh0st.sln /p:Configuration=Release
+        run: msbuild Gh0st.sln /p:Configuration=Release /p:CharacterSet=MultiByte
 
       - name: Upload All EXE and DLL
         uses: actions/upload-artifact@v4
