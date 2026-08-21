@@ -10,15 +10,18 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v2
 
-    - name: Build Solution
-      run: msbuild BGW_RAT.sln /p:Configuration=Release /p:Platform=Win32
-      
-    - name: Upload EXE
+    - name: Build Solution (Gh0st.sln)
+      run: msbuild Gh0st.sln /p:Configuration=Release /p:Platform=Win32
+
+    - name: Upload EXE files
       uses: actions/upload-artifact@v4
       with:
         name: BGW_RAT_Release
-        path: Release\*.exe
+        path: |
+          Server\Release\*.exe
+          Gh0st\Release\*.exe
+          Plugins\*\Release\*.exe
