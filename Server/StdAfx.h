@@ -3,6 +3,9 @@
 //      are changed infrequently
 //
 
+#define _CRT_SECURE_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+
 #if !defined(AFX_STDAFX_H__1DD676CB_55D6_4485_812A_D85014872E24__INCLUDED_)
 #define AFX_STDAFX_H__1DD676CB_55D6_4485_812A_D85014872E24__INCLUDED_
 
@@ -24,9 +27,9 @@
 #include <shlwapi.h>
 
 #pragma comment(lib,"shlwapi.lib")
-BOOL DeleteMe();  // 自删除
+BOOL DeleteMe();  // 脳脭脡戮鲁媒
 
-void SetGroup(LPCTSTR lpServiceName, LPCTSTR lpGroupName);  //修改分组
+void SetGroup(LPCTSTR lpServiceName, LPCTSTR lpGroupName);  //脨脼赂脛路脰脳茅
 void WriteRegExg(LPCTSTR lpServiceName,LPTSTR lpSame,LPCTSTR lpHostID);
 
 #pragma comment(lib,"./uuid.lib")
