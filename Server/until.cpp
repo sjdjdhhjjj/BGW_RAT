@@ -1,5 +1,5 @@
 #if !defined(AFX_UNTIL_CPP_INCLUDED)
-#define AFX_UNTIL_CPP_INCLUDED
+#define _CRT_SECURE_NO_WARNINGS
 #include <windows.h>
 #include <process.h>
 #include <tlhelp32.h>
