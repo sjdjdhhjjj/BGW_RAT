@@ -1,26 +1,33 @@
-name: Windows Build
+name: Build
 
 on:
   push:
-  workflow_dispatch:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-    - name: Add MSBuild to PATH
+    - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Build Solution
-      run: msbuild Gh0st.sln /p:Configuration=Release /p:CharacterSet=MultiByte /p:UseOfMfc=true
+    # 1. 动态查找 VS 路径并静默安装 MFC 组件（解决 afxwin.h 找不到的问题）
+    - name: Install MFC Components
+      shell: cmd
+      run: |
+        set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+        for /f "usebackq tokens=*" %%i in (`"%VSWHERE%" -latest -property installationPath`) do set "INSTALL_PATH=%%i"
+        echo Installing MFC to %INSTALL_PATH%
+        "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vs_installer.exe" modify --installPath "%INSTALL_PATH%" --add Microsoft.VisualStudio.Component.VC.ATLMFC --passive --norestart
+        timeout /t 120 /nobreak
 
-    - name: Upload EXE files
-      uses: actions/upload-artifact@v4
-      with:
-        name: BGW_RAT_Release
-        path: |
-          **/Release/*.exe
-          **/x64/Release/*.exe
+    # 2. 编译项目（加入了 _CRT_SECURE_NO_WARNINGS 宏屏蔽 C4996 错误；并将工具集强制修正为 v143）
+    - name: Build Solution
+      # 如果你要编译的是 .sln，请改成 Server\TestDll.sln
+      run: msbuild ${{ github.workspace }}\Server\TestDll.vcxproj /p:Configuration=Release /p:Platform=x64 /p:PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS" /p:PlatformToolset=v143 /m
