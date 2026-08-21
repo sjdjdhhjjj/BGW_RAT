@@ -1,4 +1,4 @@
-name: Build
+name: Build All
 
 on:
   push:
@@ -10,7 +10,23 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
-      - name: Build
-        run: msbuild "${{ github.workspace }}\Server\Server.vcxproj" /p:Configuration=Release /p:Platform=x64 /p:PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS" /m
+        
+      - name: Build All Projects in Server
+        shell: pwsh
+        run: |
+          $projects = Get-ChildItem -Path "${{ github.workspace }}\Server" -Filter *.vcxproj
+          foreach ($proj in $projects) {
+            Write-Host "正在构建全部功能项目: $($proj.Name)"
+            msbuild $proj.FullName /p:Configuration=Release /p:Platform=x64 /p:PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS" /m
+          }
+          
+      - name: Upload All EXE and DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: BGW_RAT_All_Functions
+          path: |
+            Server\**\*.exe
+            Server\**\*.dll
