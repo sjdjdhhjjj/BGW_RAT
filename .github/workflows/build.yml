@@ -1,4 +1,4 @@
-name: Build All
+name: Build
 on:
   push:
     branches: [ "master" ]
@@ -8,14 +8,15 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
-      - name: Setup MSBuild
+      - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v2
-      - name: Install MFC
+      - name: Install MFC (提供 afxwin.h)
         shell: pwsh
         run: |
-          $installPath = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise"
-          Start-Process -FilePath "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe" -ArgumentList "modify", "--installPath", $installPath, "--add", "Microsoft.VisualStudio.Component.VC.ATLMFC", "--quiet", "--norestart" -Wait
-      - name: Build All Projects (强制ANSI编码)
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installPath = & $vswhere -latest -property installationPath
+          Start-Process -FilePath "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe" -ArgumentList "modify", "--installPath", "$installPath", "--add", "Microsoft.VisualStudio.Component.VC.ATLMFC", "--quiet", "--norestart" -Wait
+      - name: Build All Projects (修复全部编译错误)
         shell: cmd
         run: |
           msbuild "${{ github.workspace }}\Server\Server.vcxproj" /p:Configuration=Release /p:Platform=x64 /p:CharacterSet=MultiByte /p:PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS;_MBCS" /m
@@ -23,7 +24,7 @@ jobs:
       - name: Upload All EXE and DLL
         uses: actions/upload-artifact@v4
         with:
-          name: BGW_RAT_Final
+          name: Complete
           path: |
             Server\**\*.exe
             Server\**\*.dll
